@@ -602,6 +602,13 @@ function renderCards(){
         act.appendChild(makeBtn(bcls,btxt,function(){openRenew(pid);}));
       }
       act.appendChild(makeBtn('btn btn-edit','✎',function(){openEdit(pid);}));
+      // Botón eliminar para todos los pacientes
+      (function(pid2){
+        var delBtn=makeBtn('btn btn-inac','✕',function(){eliminarPaciente(pid2);});
+        delBtn.title='Eliminar paciente';
+        delBtn.style.cssText='color:var(--red);border-color:var(--border)';
+        act.appendChild(delBtn);
+      })(pid);
       if(isA){
         var iw=mk('div','inac-wrap');
         var im=mk('div','inac-menu');
@@ -697,27 +704,94 @@ function savePatient(){
     tel:document.getElementById('f-tel').value.trim(),
     email:document.getElementById('f-email').value.trim(),
     obs:document.getElementById('f-obs').value.trim()};
-  if(editId)params.id=editId;
-  api(editId?'editar':'alta',params)
-    .then(function(){closePatient();showToast(editId?'Paciente actualizado':'Alta registrada','ok');return syncData();})
-    .catch(function(err){showToast('Error: '+err.message,'err');});
+  if(editId){
+    // Optimistic update para edición
+    var pt=patients.find(function(p){return p.id===editId;});
+    var prev=pt?JSON.parse(JSON.stringify(pt)):null;
+    if(pt)Object.assign(pt,params);
+    closePatient();
+    renderAll();
+    showToast('Paciente actualizado','ok');
+    params.id=editId;
+    api('editar',params).catch(function(err){
+      if(pt&&prev)Object.assign(pt,prev);
+      renderAll();
+      showToast('Error al guardar: '+err.message,'err');
+    });
+  } else {
+    // Alta: necesita el ID del servidor
+    api('alta',params)
+      .then(function(data){
+        params.id=data.id||('PAC-LOCAL-'+Date.now());
+        params.estado='Activo';params.baja_motivo=null;params.fecha_vencio=null;
+        params.fecha_renovacion=todayStr();
+        patients.push(params);
+        closePatient();renderAll();
+        showToast('Paciente dado de alta','ok');
+      })
+      .catch(function(err){showToast('Error: '+err.message,'err');});
+  }
 }
 function saveRenew(){
   var meld=parseInt(document.getElementById('r-meld').value);
   var fecha=document.getElementById('r-fecha').value;
   if(!meld||!fecha){showToast('Completá MELD y fecha','err');return;}
   var pt=patients.find(function(p){return p.id===renewId;});
-  var eb=pt&&pt.estado==='Baja transitoria',mot=pt&&pt.baja_motivo;
-  api('renovar',{id:renewId,meld:meld,spa_meld:parseInt(document.getElementById('r-spa-meld').value)||meld,fecha_renovacion:fecha})
-    .then(function(){closeRenew();showToast(eb?(mot==='vencimiento'?'Reactivado — lab renovado ✓':'Reactivado ✓'):'Laboratorio renovado ✓','ok');return syncData();})
-    .catch(function(err){showToast('Error: '+err.message,'err');});
+  if(!pt)return;
+  var eb=pt.estado==='Baja transitoria',mot=pt.baja_motivo;
+  // Optimistic update — actualizar local inmediatamente
+  var prev=JSON.parse(JSON.stringify(pt));
+  pt.meld=meld;
+  pt.spa_meld=parseInt(document.getElementById('r-spa-meld').value)||meld;
+  pt.fecha_renovacion=fecha;
+  pt.estado='Activo';
+  pt.baja_motivo=null;
+  pt.fecha_vencio=null;
+  closeRenew();
+  renderAll();
+  showToast(eb?(mot==='vencimiento'?'Reactivado — lab renovado ✓':'Reactivado ✓'):'Laboratorio renovado ✓','ok');
+  // Sincronizar con servidor en segundo plano
+  api('renovar',{id:renewId,meld:meld,spa_meld:pt.spa_meld,fecha_renovacion:fecha})
+    .catch(function(err){
+      // Revertir si falla
+      Object.assign(pt,prev);
+      renderAll();
+      showToast('Error al guardar: '+err.message,'err');
+    });
 }
 function doInac(id,estado,motivo){
   var pt=patients.find(function(p){return p.id===id;});
+  if(!pt)return;
+  var prev=JSON.parse(JSON.stringify(pt));
+  // Optimistic update
+  pt.estado=estado;
+  pt.baja_motivo=motivo||'manual';
+  pt.fecha_vencio=null;
+  renderAll();
+  showToast(pt.apellido+' → '+estado,'ok');
   api('inactivar',{id:id,estado:estado,baja_motivo:motivo||'manual'})
-    .then(function(){showToast((pt?pt.apellido:'Paciente')+' → '+estado,'ok');return syncData();})
-    .catch(function(err){showToast('Error: '+err.message,'err');});
+    .catch(function(err){
+      Object.assign(pt,prev);
+      renderAll();
+      showToast('Error al guardar: '+err.message,'err');
+    });
 }
+function eliminarPaciente(id){
+  if(!confirm('¿Confirmás la eliminación del paciente? Esta acción quedará registrada en el sistema.'))return;
+  var idx=patients.findIndex(function(p){return p.id===id;});
+  if(idx===-1)return;
+  var pt=patients[idx];
+  var removed=patients.splice(idx,1)[0];
+  renderAll();
+  showToast(pt.apellido+' eliminado','ok');
+  api('eliminar',{id:id})
+    .catch(function(err){
+      patients.splice(idx,0,removed);
+      renderAll();
+      showToast('Error al eliminar: '+err.message,'err');
+    });
+}
+
 function showToast(msg,type){
   var t=document.getElementById('toast');t.textContent=msg;t.className='show '+(type||'');
   setTimeout(function(){t.className='';},3000);
