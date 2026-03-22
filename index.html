@@ -227,6 +227,35 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
   .stat-num{ font-size:15px; }
   .stat-label{ display:none; }
 }
+.alert-banner {
+  margin: 10px 24px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  display: none;
+}
+.alert-banner.visible { display: block; }
+.alert-row {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 11px 18px; gap: 12px;
+  flex-wrap: wrap;
+}
+.alert-row.urg  { background: #fff3e0; border-left: 4px solid var(--orange); border-radius: 0; }
+.alert-row.prox { background: #fdfbe7; border-left: 4px solid var(--yellow); border-radius: 0; }
+.alert-row.venc { background: var(--red-bg); border-left: 4px solid var(--red); border-radius: 0; }
+.alert-row:first-child { border-radius: 10px 10px 0 0; }
+.alert-row:last-child  { border-radius: 0 0 10px 10px; }
+.alert-row:only-child  { border-radius: 10px; }
+.alert-text { font-size: 13px; font-weight: 600; }
+.alert-text.urg  { color: var(--orange); }
+.alert-text.prox { color: var(--yellow); }
+.alert-text.venc { color: var(--red); }
+.alert-sub  { font-size: 11px; color: var(--faint); margin-top: 1px; }
+.alert-num  { font-family: 'DM Mono', monospace; font-size: 26px; font-weight: 500; flex-shrink: 0; }
+.alert-num.urg  { color: var(--orange); }
+.alert-num.prox { color: var(--yellow); }
+.alert-num.venc { color: var(--red); }
+
 .config-panel {
   position: fixed; inset: 0;
   background: rgba(10,20,50,.45);
@@ -461,6 +490,11 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
         <label class="fl">Email destinatario</label>
         <input class="fi" type="email" id="config-email" placeholder="coordinacion@hospital.org">
       </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="fl">URL del sistema</label>
+        <input class="fi" type="text" id="config-url" placeholder="https://tu-usuario.github.io/trasplante/">
+        <div style="font-size:11px;color:var(--faint);margin-top:4px">Se incluye en el email diario para acceder al sistema</div>
+      </div>
       <div class="toggle-row">
         <div>
           <div class="toggle-label">Bajas automáticas por vencimiento</div>
@@ -561,6 +595,49 @@ function syncData(){
 }
 
 // ── STATS ─────────────────────────────────────────────────────────
+function renderBanner(){
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var hace21 = new Date(hoy); hace21.setDate(hoy.getDate()-21);
+  var urgentes=0, proximos=0, vencReciente=0;
+
+  patients.forEach(function(pt){
+    if(pt.estado==='Baja transitoria' && pt.baja_motivo==='vencimiento'){
+      if(pt.fecha_vencio){
+        var fv=new Date(pt.fecha_vencio); fv.setHours(0,0,0,0);
+        if(fv>=hace21) vencReciente++;
+      }
+      return;
+    }
+    if(pt.estado!=='Activo')return;
+    var dias=daysUntil(calcExpiry(pt.fecha_renovacion,pt.meld));
+    if(dias<=2) urgentes++;
+    else if(dias<=7) proximos++;
+  });
+
+  var banner=document.getElementById('alert-banner');
+  if(!banner)return;
+  while(banner.firstChild)banner.removeChild(banner.firstChild);
+
+  var total=urgentes+proximos+vencReciente;
+  if(total===0){ banner.classList.remove('visible'); return; }
+  banner.classList.add('visible');
+
+  function makeRow(num, txt, sub, cls){
+    var row=mk('div','alert-row '+cls);
+    var left=mk('div');
+    left.appendChild(mk('div','alert-text '+cls, txt));
+    left.appendChild(mk('div','alert-sub', sub));
+    var numEl=mk('div','alert-num '+cls, String(num));
+    row.appendChild(left);
+    row.appendChild(numEl);
+    return row;
+  }
+
+  if(urgentes>0)    banner.appendChild(makeRow(urgentes,   'Vence en las próximas 48 hs — renovación urgente',       urgentes   +' paciente'+(urgentes>1?'s':''), 'urg'));
+  if(proximos>0)    banner.appendChild(makeRow(proximos,   'Vence en los próximos 7 días',                            proximos   +' paciente'+(proximos>1?'s':''), 'prox'));
+  if(vencReciente>0)banner.appendChild(makeRow(vencReciente,'Baja por vencimiento reciente — últimas 3 semanas',      vencReciente+' paciente'+(vencReciente>1?'s':''), 'venc'));
+}
+
 function updateStats(){
   var activos=patients.filter(function(p){return p.estado==='Activo';});
   var bajas=patients.filter(function(p){return p.estado==='Baja transitoria';}).length;
@@ -572,7 +649,7 @@ function updateStats(){
   document.getElementById('s-total').textContent=activos.length;
 }
 
-function renderAll(){updateStats();renderCards();}
+function renderAll(){updateStats();renderBanner();renderCards();}
 
 // ── RENDER CARDS (100% createElement) ────────────────────────────
 function makeBtn(cls,txt,fn){var b=mk('button',cls,txt);b.addEventListener('click',fn);return b;}
@@ -894,6 +971,8 @@ function openConfig(){
       if(tog) tog.className = 'toggle-switch' + (configState.habilitado?' on':'');
       var emailInput = document.getElementById('config-email');
       if(emailInput) emailInput.value = configState.email;
+      var urlInput = document.getElementById('config-url');
+      if(urlInput) urlInput.value = cfg['URL del sistema'] || '';
       var emailField = document.getElementById('email-field');
       if(emailField) emailField.style.display = configState.habilitado?'block':'none';
       document.getElementById('config-panel').classList.add('open');
@@ -910,7 +989,8 @@ function saveConfig(){
   var tog = document.getElementById('toggle-email');
   var hab = tog && tog.classList.contains('on');
   if(hab && !email){ showToast('Ingresá un email destinatario','err'); return; }
-  api('setConfig',{habilitado:hab, email:email})
+  var appUrl = document.getElementById('config-url') ? document.getElementById('config-url').value.trim() : '';
+  api('setConfig',{habilitado:hab, email:email, appUrl:appUrl})
     .then(function(){
       closeConfig();
       showToast('Configuración guardada','ok');
