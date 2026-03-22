@@ -227,6 +227,51 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
   .stat-num{ font-size:15px; }
   .stat-label{ display:none; }
 }
+.config-panel {
+  position: fixed; inset: 0;
+  background: rgba(10,20,50,.45);
+  z-index: 300; display: none;
+  align-items: center; justify-content: center;
+  padding: 16px; backdrop-filter: blur(3px);
+}
+.config-panel.open { display: flex; }
+.config-box {
+  background: white; border-radius: 16px;
+  width: 100%; max-width: 440px;
+  box-shadow: 0 24px 64px rgba(10,20,50,.25);
+  overflow: hidden;
+}
+.config-head {
+  padding: 20px 24px 18px;
+  background: linear-gradient(135deg,var(--blue-dark),var(--blue));
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.config-head h2 { font-size:17px;font-weight:700;color:white;letter-spacing:-.01em; }
+.config-head .sub { font-size:12px;color:rgba(255,255,255,.6);margin-top:3px; }
+.config-body { padding: 22px 24px; }
+.config-foot { padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface2); }
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.toggle-row:last-of-type { border-bottom: none; }
+.toggle-label { font-size:13px;font-weight:500;color:var(--text); }
+.toggle-sub   { font-size:11px;color:var(--faint);margin-top:2px; }
+.toggle-switch {
+  width:40px;height:22px;border-radius:11px;
+  background:var(--border2);border:none;cursor:pointer;
+  position:relative;transition:background .2s;flex-shrink:0;
+}
+.toggle-switch.on { background:var(--blue); }
+.toggle-switch::after {
+  content:'';position:absolute;
+  width:18px;height:18px;border-radius:50%;
+  background:white;top:2px;left:2px;
+  transition:transform .2s;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);
+}
+.toggle-switch.on::after { transform:translateX(18px); }
+
 @media(max-width:720px){
   .card-body-activo{grid-template-columns:1fr auto;}
   .p-meld-col,.p-exp-col,.p-ren-col{display:none;}
@@ -256,6 +301,7 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
     </div>
   </div>
   <div class="header-actions">
+    <button class="btn btn-ghost" id="btn-config" title="Configuración">⚙</button>
     <button class="btn btn-ghost" id="btn-sync">↻ Sincronizar</button>
     <button class="btn btn-ghost" id="btn-add">+ Paciente</button>
   </div>
@@ -392,6 +438,43 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
 </div>
 
 <div id="toast"></div>
+
+<!-- PANEL CONFIGURACIÓN -->
+<div class="config-panel" id="config-panel">
+  <div class="config-box">
+    <div class="config-head">
+      <div>
+        <h2>Configuración</h2>
+        <div class="sub">Opciones del sistema</div>
+      </div>
+      <button class="modal-close" id="btn-close-config">×</button>
+    </div>
+    <div class="config-body">
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Resumen diario por email</div>
+          <div class="toggle-sub">Envía un email cada mañana con los pacientes que requieren atención</div>
+        </div>
+        <button class="toggle-switch" id="toggle-email" aria-label="Activar email diario"></button>
+      </div>
+      <div class="form-group" id="email-field" style="margin-top:14px">
+        <label class="fl">Email destinatario</label>
+        <input class="fi" type="email" id="config-email" placeholder="coordinacion@hospital.org">
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Bajas automáticas por vencimiento</div>
+          <div class="toggle-sub">Requiere trigger diario configurado en Apps Script</div>
+        </div>
+        <span style="font-size:12px;color:var(--green);font-weight:600">✓ Activo</span>
+      </div>
+    </div>
+    <div class="config-foot">
+      <button class="btn btn-cancel" id="btn-cancel-config">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-config">Guardar configuración</button>
+    </div>
+  </div>
+</div>
 <script>
 
 // ── CONFIGURACIÓN ─────────────────────────────────────────────────
@@ -798,14 +881,55 @@ function showToast(msg,type){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
+// ── CONFIGURACIÓN ────────────────────────────────────────────────
+var configState = { habilitado: false, email: '' };
+
+function openConfig(){
+  api('getConfig',{})
+    .then(function(data){
+      var cfg = data.config || {};
+      configState.habilitado = cfg['Enviar resumen diario por email'] === 'Sí';
+      configState.email = cfg['Email para resumen'] || '';
+      var tog = document.getElementById('toggle-email');
+      if(tog) tog.className = 'toggle-switch' + (configState.habilitado?' on':'');
+      var emailInput = document.getElementById('config-email');
+      if(emailInput) emailInput.value = configState.email;
+      var emailField = document.getElementById('email-field');
+      if(emailField) emailField.style.display = configState.habilitado?'block':'none';
+      document.getElementById('config-panel').classList.add('open');
+    })
+    .catch(function(err){ showToast('Error al cargar config: '+err.message,'err'); });
+}
+
+function closeConfig(){
+  document.getElementById('config-panel').classList.remove('open');
+}
+
+function saveConfig(){
+  var email = document.getElementById('config-email').value.trim();
+  var tog = document.getElementById('toggle-email');
+  var hab = tog && tog.classList.contains('on');
+  if(hab && !email){ showToast('Ingresá un email destinatario','err'); return; }
+  api('setConfig',{habilitado:hab, email:email})
+    .then(function(){
+      closeConfig();
+      showToast('Configuración guardada','ok');
+    })
+    .catch(function(err){ showToast('Error: '+err.message,'err'); });
+}
+
 function on(id, ev, fn){
   var el=document.getElementById(id);
   if(el) el.addEventListener(ev, fn);
 }
 
+on('btn-config',         'click', openConfig);
 on('btn-sync',           'click', syncData);
 on('btn-add',            'click', openAdd);
 on('btn-close-patient',  'click', closePatient);
+on('btn-close-config',   'click', closeConfig);
+on('btn-cancel-config',  'click', closeConfig);
+on('btn-save-config',    'click', saveConfig);
 on('btn-cancel-patient', 'click', closePatient);
 on('btn-close-renew',    'click', closeRenew);
 on('btn-cancel-renew',   'click', closeRenew);
@@ -821,6 +945,13 @@ on('vp-prox', 'click', function(){setView('prox');});
 on('vp-venc', 'click', function(){setView('venc');});
 on('vp-baja', 'click', function(){setView('baja');});
 on('sort-sel', 'change', renderAll);
+on('toggle-email','click',function(){
+  var tog=document.getElementById('toggle-email');
+  if(!tog)return;
+  tog.classList.toggle('on');
+  var emailField=document.getElementById('email-field');
+  if(emailField)emailField.style.display=tog.classList.contains('on')?'block':'none';
+});
 on('search',   'input',  renderAll);
 on('r-meld',     'input',  updatePreview);
 on('r-spa-meld', 'input',  updatePreview);
