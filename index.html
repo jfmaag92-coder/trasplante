@@ -424,17 +424,15 @@ var patients=[], editId=null, renewId=null, filterBlood='ALL', filterView='todos
 // ── API (fetch puro — sin sandbox de Apps Script) ─────────────────
 function api(accion, params){
   if(!SCRIPT_URL){showToast('Configurá la URL del Apps Script','err');return Promise.reject(new Error('Sin URL'));}
-  var url = SCRIPT_URL + '?accion=' + encodeURIComponent(accion);
-  return fetch(url, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(Object.assign({accion:accion}, params||{}))
-  })
-  .then(function(r){return r.json();})
-  .then(function(data){
-    if(data&&data.ok===false)throw new Error(data.error||'Error del servidor');
-    return data;
-  });
+  // Usar GET con params serializados — Apps Script soporta CORS en GET automáticamente
+  var data = Object.assign({accion:accion}, params||{});
+  var url = SCRIPT_URL + '?accion=' + encodeURIComponent(accion) + '&data=' + encodeURIComponent(JSON.stringify(data));
+  return fetch(url, {method:'GET'})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data&&data.ok===false)throw new Error(data.error||'Error del servidor');
+      return data;
+    });
 }
 
 // ── BAJAS AUTOMÁTICAS ─────────────────────────────────────────────
