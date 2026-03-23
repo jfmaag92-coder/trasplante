@@ -330,6 +330,88 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
 .btn-contact:hover { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
 .btn-contact.open { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
 
+.note-indicator {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600;
+  color: var(--blue); background: var(--blue-light);
+  border: 1px solid #c0d4f5;
+  padding: 2px 7px; border-radius: 4px;
+  margin-top: 5px; cursor: pointer;
+  transition: all .13s;
+}
+.note-indicator:hover { background: #d4e4fb; }
+.note-indicator .ni-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue); flex-shrink: 0;
+}
+.notes-section {
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  padding: 12px 18px;
+}
+.notes-section-title {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.note-item {
+  background: white; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 12px;
+  margin-bottom: 7px; position: relative;
+}
+.note-item:last-of-type { margin-bottom: 0; }
+.note-text { font-size: 13px; color: var(--text); line-height: 1.4; padding-right: 24px; }
+.note-meta {
+  font-size: 10px; color: var(--faint);
+  margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap;
+}
+.note-caduca-tag {
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 3px; text-transform: uppercase; letter-spacing: .04em;
+}
+.nct-renovacion { background: var(--blue-light); color: var(--blue); }
+.nct-dias       { background: var(--yellow-bg);  color: var(--yellow); }
+.nct-nunca      { background: var(--green-bg);   color: var(--green); }
+.note-del {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: none; cursor: pointer;
+  color: var(--faint); font-size: 14px; line-height: 1;
+  padding: 2px 4px; border-radius: 3px; transition: all .13s;
+}
+.note-del:hover { background: var(--red-bg); color: var(--red); }
+.note-form {
+  margin-top: 10px; background: white;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.note-form textarea {
+  width: 100%; border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 10px;
+  font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px;
+  color: var(--text); resize: none; min-height: 60px;
+  transition: border-color .14s;
+}
+.note-form textarea:focus { outline: none; border-color: var(--blue); }
+.note-form-row {
+  display: flex; gap: 8px; align-items: center;
+  margin-top: 8px; flex-wrap: wrap;
+}
+.note-caduca-sel {
+  padding: 5px 10px; border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 12px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--muted); background: white; cursor: pointer;
+}
+.note-caduca-sel:focus { outline: none; border-color: var(--blue); }
+.note-dias-input {
+  width: 60px; padding: 5px 8px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 12px; font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--text); display: none;
+}
+.note-dias-input:focus { outline: none; border-color: var(--blue); }
+
 @media(max-width:720px){
   .card-body-activo{grid-template-columns:1fr auto;}
   .p-meld-col,.p-exp-col,.p-ren-col{display:none;}
@@ -581,6 +663,151 @@ function mk(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cl
 var patients=[], patientsPerm=[], editId=null, renewId=null, filterBlood='ALL', filterView='todos';
 
 // ── API (fetch puro — sin sandbox de Apps Script) ─────────────────
+
+// ── NOTAS ─────────────────────────────────────────────────────────
+var notesCache = {}; // id_paciente → [notas]
+
+function cargarNotas(idPaciente, callback) {
+  api('listarNotas', {id_paciente: idPaciente})
+    .then(function(data) {
+      notesCache[idPaciente] = data.notas || [];
+      if (callback) callback(notesCache[idPaciente]);
+    })
+    .catch(function(err) { showToast('Error al cargar notas: ' + err.message, 'err'); });
+}
+
+function renderNotasPanel(idPaciente, container) {
+  while(container.firstChild) container.removeChild(container.firstChild);
+
+  var notas = notesCache[idPaciente] || [];
+
+  // Title row
+  var titleRow = mk('div', 'notes-section-title');
+  titleRow.appendChild(mk('span', null, '📝 Notas' + (notas.length > 0 ? ' (' + notas.length + ')' : '')));
+  container.appendChild(titleRow);
+
+  // Notes list
+  if (notas.length === 0) {
+    var empty = mk('div', null, 'Sin notas activas');
+    empty.style.cssText = 'font-size:12px;color:var(--faint);margin-bottom:10px';
+    container.appendChild(empty);
+  } else {
+    notas.forEach(function(nota) {
+      var item = mk('div', 'note-item');
+
+      var txt = mk('div', 'note-text', nota.texto);
+      item.appendChild(txt);
+
+      var meta = mk('div', 'note-meta');
+      meta.appendChild(mk('span', null, nota.fecha));
+
+      var tagCls = nota.caduca === 'renovacion' ? 'nct-renovacion'
+                 : nota.caduca === 'dias'        ? 'nct-dias'
+                 :                                 'nct-nunca';
+      var tagTxt = nota.caduca === 'renovacion' ? 'Caduca al renovar'
+                 : nota.caduca === 'dias' && nota.fecha_caducidad ? 'Hasta ' + nota.fecha_caducidad
+                 : 'Permanente';
+      meta.appendChild(mk('span', 'note-caduca-tag ' + tagCls, tagTxt));
+      item.appendChild(meta);
+
+      var delBtn = mk('button', 'note-del', '×');
+      delBtn.title = 'Eliminar nota';
+      (function(nid, pid) {
+        delBtn.addEventListener('click', function() {
+          api('eliminarNota', {id_nota: nid})
+            .then(function() {
+              cargarNotas(pid, function() {
+                renderNotasPanel(pid, container);
+                actualizarIndicadorNotas(pid);
+              });
+            })
+            .catch(function(err) { showToast('Error: ' + err.message, 'err'); });
+        });
+      })(nota.id, idPaciente);
+      item.appendChild(delBtn);
+      container.appendChild(item);
+    });
+  }
+
+  // Add note form
+  var form = mk('div', 'note-form');
+  var ta = document.createElement('textarea');
+  ta.placeholder = 'Agregar nota...';
+  form.appendChild(ta);
+
+  var formRow = mk('div', 'note-form-row');
+
+  var sel = document.createElement('select');
+  sel.className = 'note-caduca-sel';
+  [['nunca','Permanente'],['renovacion','Caduca al renovar'],['dias','Caduca en X días']]
+    .forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt[0]; o.textContent = opt[1];
+      sel.appendChild(o);
+    });
+
+  var diasInput = mk('input');
+  diasInput.type = 'number';
+  diasInput.min = '1'; diasInput.max = '365';
+  diasInput.placeholder = 'días';
+  diasInput.className = 'note-dias-input';
+
+  sel.addEventListener('change', function() {
+    diasInput.style.display = sel.value === 'dias' ? 'block' : 'none';
+  });
+
+  var saveBtn = mk('button', 'btn btn-primary', 'Guardar');
+  saveBtn.style.cssText = 'padding:5px 14px;font-size:12px';
+
+  (function(pid) {
+    saveBtn.addEventListener('click', function() {
+      var texto = ta.value.trim();
+      if (!texto) { showToast('Escribí algo antes de guardar', 'err'); return; }
+      var params = { id_paciente: pid, texto: texto, caduca: sel.value };
+      if (sel.value === 'dias') {
+        var d = parseInt(diasInput.value);
+        if (!d || d < 1) { showToast('Ingresá la cantidad de días', 'err'); return; }
+        params.dias = d;
+      }
+      api('agregarNota', params)
+        .then(function() {
+          ta.value = '';
+          sel.value = 'nunca';
+          diasInput.style.display = 'none';
+          cargarNotas(pid, function() {
+            renderNotasPanel(pid, container);
+            actualizarIndicadorNotas(pid);
+          });
+          showToast('Nota guardada', 'ok');
+        })
+        .catch(function(err) { showToast('Error: ' + err.message, 'err'); });
+    });
+  })(idPaciente);
+
+  formRow.appendChild(sel);
+  formRow.appendChild(diasInput);
+  formRow.appendChild(saveBtn);
+  form.appendChild(formRow);
+  container.appendChild(form);
+}
+
+function actualizarIndicadorNotas(idPaciente) {
+  var notas = notesCache[idPaciente] || [];
+  var indicator = document.querySelector('.note-ind-' + idPaciente.replace(/[^a-zA-Z0-9]/g,'_'));
+  if (!indicator) return;
+  if (notas.length > 0) {
+    indicator.style.display = 'inline-flex';
+    indicator.querySelector('.ni-count').textContent = notas.length;
+  } else {
+    indicator.style.display = 'none';
+  }
+}
+
+// Crear hoja Notas si no existe (llamar una vez)
+function inicializarNotas() {
+  api('crearHojaNotas', {}).catch(function(){});
+}
+
 function api(accion, params){
   if(!SCRIPT_URL){showToast('Configurá la URL del Apps Script','err');return Promise.reject(new Error('Sin URL'));}
   // Usar GET con params serializados — Apps Script soporta CORS en GET automáticamente
@@ -783,6 +1010,36 @@ function renderCards(){
         nc.appendChild(contactBtn);
       }
 
+      // Indicador de notas
+      (function(pid3){
+        var noteInd = mk('span', 'note-indicator note-ind-' + pid3.replace(/[^a-zA-Z0-9]/g,'_'));
+        noteInd.style.display = 'none'; // se muestra cuando haya notas
+        var dot = mk('span', 'ni-dot');
+        var count = mk('span', 'ni-count', '0');
+        var label = mk('span', null, ' notas');
+        label.style.cssText = 'font-size:10px';
+        noteInd.appendChild(dot);
+        noteInd.appendChild(count);
+        noteInd.appendChild(label);
+        noteInd.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var wrap = noteInd.closest('.patient-card-wrap');
+          if (!wrap) return;
+          var panel = wrap.querySelector('.card-contact');
+          if (panel && !panel.classList.contains('open')) {
+            panel.classList.add('open');
+            var contactBtn2 = wrap.querySelector('.btn-contact');
+            if (contactBtn2) contactBtn2.classList.add('open');
+          }
+          // Scroll to notes section
+          var notesSection = wrap.querySelector('.notes-section');
+          if (notesSection) notesSection.scrollIntoView({behavior:'smooth', block:'nearest'});
+        });
+        nc.appendChild(noteInd);
+        // Load notes for this patient
+        cargarNotas(pid3, function() { actualizarIndicadorNotas(pid3); });
+      })(pid);
+
       if(isBV){
         var vw=mk('div');vw.style.cssText='display:flex;align-items:center;gap:20px;flex-wrap:wrap';
         vw.appendChild(nc);
@@ -883,7 +1140,62 @@ function renderCards(){
           oi.appendChild(mk('span',null,pt.obs));
           contactPanel.appendChild(oi);
         }
+        // Notes section inside contact panel
+        var notesSection = mk('div', 'notes-section');
+        contactPanel.appendChild(notesSection);
+        // Will be populated when panel opens
+        (function(pid4, ns) {
+          var origToggle = contactPanel.classList.toggle.bind(contactPanel);
+          // Render notes when panel opens
+          var observer = new MutationObserver(function() {
+            if (contactPanel.classList.contains('open')) {
+              cargarNotas(pid4, function() {
+                renderNotasPanel(pid4, ns);
+              });
+            }
+          });
+          observer.observe(contactPanel, {attributes: true, attributeFilter: ['class']});
+        })(pid, notesSection);
+
         wrap2.appendChild(contactPanel);
+      } else {
+        // No contact data but still add notes panel
+        var contactPanel2 = mk('div', 'card-contact');
+        var notesSection2 = mk('div', 'notes-section');
+        contactPanel2.appendChild(notesSection2);
+        wrap2.appendChild(contactPanel2);
+
+        // Add ··· button for notes-only patients
+        var noteOnlyBtn = mk('button', 'btn-contact', '···');
+        noteOnlyBtn.style.cssText = 'font-size:14px;font-weight:700;letter-spacing:.05em;margin-top:4px;padding:1px 7px;border-radius:4px;';
+        noteOnlyBtn.title = 'Notas';
+        noteOnlyBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          contactPanel2.classList.toggle('open');
+          noteOnlyBtn.classList.toggle('open');
+          if (contactPanel2.classList.contains('open')) {
+            cargarNotas(pid, function() { renderNotasPanel(pid, notesSection2); });
+          }
+        });
+        nc.appendChild(noteOnlyBtn);
+
+        // Note indicator for no-contact patients
+        (function(pid5){
+          var noteInd2 = mk('span', 'note-indicator note-ind-' + pid5.replace(/[^a-zA-Z0-9]/g,'_'));
+          noteInd2.style.display = 'none';
+          var dot2 = mk('span','ni-dot');
+          var count2 = mk('span','ni-count','0');
+          noteInd2.appendChild(dot2); noteInd2.appendChild(count2);
+          noteInd2.appendChild(mk('span',null,' notas'));
+          noteInd2.addEventListener('click', function(e){
+            e.stopPropagation();
+            contactPanel2.classList.add('open');
+            noteOnlyBtn.classList.add('open');
+            cargarNotas(pid5, function(){ renderNotasPanel(pid5, notesSection2); });
+          });
+          nc.appendChild(noteInd2);
+          cargarNotas(pid5, function(){ actualizarIndicadorNotas(pid5); });
+        })(pid);
       }
       cont.appendChild(wrap2);
     });
@@ -1164,6 +1476,7 @@ if(savedUrl){
   if(inp) inp.value = savedUrl;
   var banner2 = document.getElementById('config-banner');
   if(banner2) banner2.style.display='none';
+  inicializarNotas();
   syncData();
 } else {
   var contentEl = document.getElementById('content');
