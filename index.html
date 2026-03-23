@@ -668,6 +668,7 @@ var patients=[], patientsPerm=[], editId=null, renewId=null, filterBlood='ALL', 
 var notesCache = {}; // id_paciente → [notas]
 
 function cargarNotas(idPaciente, callback) {
+  if (!idPaciente) return;
   api('listarNotas', {id_paciente: idPaciente})
     .then(function(data) {
       notesCache[idPaciente] = data.notas || [];
@@ -792,8 +793,9 @@ function renderNotasPanel(idPaciente, container) {
 }
 
 function actualizarIndicadorNotas(idPaciente) {
+  if (!idPaciente) return;
   var notas = notesCache[idPaciente] || [];
-  var indicator = document.querySelector('.note-ind-' + idPaciente.replace(/[^a-zA-Z0-9]/g,'_'));
+  var indicator = document.querySelector('.note-ind-' + String(idPaciente).replace(/[^a-zA-Z0-9]/g,'_'));
   if (!indicator) return;
   if (notas.length > 0) {
     indicator.style.display = 'inline-flex';
@@ -1012,7 +1014,7 @@ function renderCards(){
 
       // Indicador de notas
       (function(pid3){
-        var noteInd = mk('span', 'note-indicator note-ind-' + pid3.replace(/[^a-zA-Z0-9]/g,'_'));
+        var noteInd = mk('span', 'note-indicator note-ind-' + String(pid3).replace(/[^a-zA-Z0-9]/g,'_'));
         noteInd.style.display = 'none'; // se muestra cuando haya notas
         var dot = mk('span', 'ni-dot');
         var count = mk('span', 'ni-count', '0');
@@ -1181,7 +1183,7 @@ function renderCards(){
 
         // Note indicator for no-contact patients
         (function(pid5){
-          var noteInd2 = mk('span', 'note-indicator note-ind-' + pid5.replace(/[^a-zA-Z0-9]/g,'_'));
+          var noteInd2 = mk('span', 'note-indicator note-ind-' + String(pid5).replace(/[^a-zA-Z0-9]/g,'_'));
           noteInd2.style.display = 'none';
           var dot2 = mk('span','ni-dot');
           var count2 = mk('span','ni-count','0');
