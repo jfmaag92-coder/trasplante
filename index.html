@@ -669,7 +669,7 @@ var notesCache = {}; // id_paciente → [notas]
 
 function cargarNotas(idPaciente, callback) {
   if (!idPaciente) return;
-  // Si ya están en cache, usar directamente sin llamada al servidor
+  // Si ya están en cache (incluso array vacío), usar directamente
   if (notesCache[idPaciente] !== undefined) {
     if (callback) callback(notesCache[idPaciente]);
     return;
@@ -901,8 +901,11 @@ function syncData(){
       patients = todos.filter(function(p){return p.estado !== 'Eliminado' && p.estado !== 'Baja permanente';});
       patientsPerm = todos.filter(function(p){return p.estado === 'Baja permanente';});
       // Pre-poblar cache de notas — vienen en la misma respuesta, sin llamada extra
-      if(data.notas && data.notas.length >= 0){
-        notesCache = {};
+      notesCache = {};
+      // Inicializar cache vacío para todos los pacientes
+      todos.forEach(function(p){ if(p.id) notesCache[String(p.id)] = []; });
+      // Llenar con notas activas
+      if(data.notas){
         data.notas.forEach(function(n){
           if(!notesCache[n.id_paciente]) notesCache[n.id_paciente] = [];
           notesCache[n.id_paciente].push(n);
@@ -1089,11 +1092,14 @@ function renderCards(){
           }
           // Scroll to notes section
           var notesSection = wrap.querySelector('.notes-section');
-          if (notesSection) notesSection.scrollIntoView({behavior:'smooth', block:'nearest'});
+          if (notesSection) {
+            renderNotasPanel(idPaciente, notesSection);
+            notesSection.scrollIntoView({behavior:'smooth', block:'nearest'});
+          }
         });
         nc.appendChild(noteInd);
         // Load notes for this patient
-        cargarNotas(pid3, function() { actualizarIndicadorNotas(pid3); });
+        actualizarIndicadorNotas(pid3); // cache already populated on sync
       })(pid);
 
       if(isBV){
@@ -1205,9 +1211,7 @@ function renderCards(){
           // Render notes when panel opens
           var observer = new MutationObserver(function() {
             if (contactPanel.classList.contains('open')) {
-              cargarNotas(pid4, function() {
-                renderNotasPanel(pid4, ns);
-              });
+              renderNotasPanel(pid4, ns);
             }
           });
           observer.observe(contactPanel, {attributes: true, attributeFilter: ['class']});
@@ -1230,7 +1234,7 @@ function renderCards(){
           contactPanel2.classList.toggle('open');
           noteOnlyBtn.classList.toggle('open');
           if (contactPanel2.classList.contains('open')) {
-            cargarNotas(pid, function() { renderNotasPanel(pid, notesSection2); });
+            renderNotasPanel(pid, notesSection2);
           }
         });
         nc.appendChild(noteOnlyBtn);
@@ -1247,10 +1251,10 @@ function renderCards(){
             e.stopPropagation();
             contactPanel2.classList.add('open');
             noteOnlyBtn.classList.add('open');
-            cargarNotas(pid5, function(){ renderNotasPanel(pid5, notesSection2); });
+            renderNotasPanel(pid5, notesSection2);
           });
           nc.appendChild(noteInd2);
-          cargarNotas(pid5, function(){ actualizarIndicadorNotas(pid5); });
+          actualizarIndicadorNotas(pid5);
         })(pid);
       }
       cont.appendChild(wrap2);
