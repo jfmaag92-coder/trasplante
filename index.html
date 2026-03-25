@@ -641,10 +641,10 @@ label.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;l
 var SCRIPT_URL = localStorage.getItem('scriptUrl') || '';
 
 var INTERVALS = [
-  {from:0,  to:15, days:90, label:'cada 3 meses'},
-  {from:15, to:20, days:30, label:'mensual'},
-  {from:20, to:25, days:15, label:'cada 15 días'},
-  {from:25, to:99, days:7,  label:'semanal'},
+  {from:0,  to:11, days:180, label:'cada 6 meses'},
+  {from:11, to:20, days:90,  label:'cada 3 meses'},
+  {from:20, to:25, days:30,  label:'mensual'},
+  {from:25, to:99, days:7,   label:'semanal'},
 ];
 function getInterval(m){return INTERVALS.find(function(i){return m>=i.from&&m<i.to;})||INTERVALS[INTERVALS.length-1];}
 function calcExpiry(r,m){var d=new Date(r);d.setDate(d.getDate()+getInterval(m).days);return d;}
