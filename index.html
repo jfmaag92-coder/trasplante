@@ -900,8 +900,12 @@ function syncData(){
     .then(function(data){
       var todos = data.pacientes||[];
       aplicarBajas(todos);
-      patients = todos.filter(function(p){return p.estado !== 'Eliminado' && p.estado !== 'Baja permanente';});
-      patientsPerm = todos.filter(function(p){return p.estado === 'Baja permanente';});
+      patients = todos.filter(function(p){
+        return p.estado !== 'Eliminado' && p.estado !== 'Baja permanente' && !eliminadosLocal[p.id];
+      });
+      patientsPerm = todos.filter(function(p){
+        return p.estado === 'Baja permanente' && !eliminadosLocal[p.id];
+      });
       // Pre-poblar cache de notas — vienen en la misma respuesta, sin llamada extra
       notesCache = {};
       // Inicializar cache vacío para todos los pacientes
@@ -1470,9 +1474,11 @@ function doInac(id,estado,motivo){
       showToast('Error al guardar: '+err.message,'err');
     });
 }
+// Set de IDs eliminados en esta sesión — persiste entre syncs
+var eliminadosLocal = {};
+
 function eliminarPaciente(id){
   if(!confirm('¿Confirmás la eliminación del paciente? Esta acción quedará registrada en el sistema.'))return;
-  // Buscar en ambos arrays
   var idx=patients.findIndex(function(p){return p.id===id;});
   var idxP=patientsPerm.findIndex(function(p){return p.id===id;});
   var arr = idx>=0 ? patients : patientsPerm;
@@ -1480,10 +1486,17 @@ function eliminarPaciente(id){
   if(realIdx===-1)return;
   var pt=arr[realIdx];
   var removed=arr.splice(realIdx,1)[0];
+  eliminadosLocal[id] = true;
   renderAll();
   showToast(pt.apellido+' eliminado','ok');
   api('eliminar',{id:id})
+    .then(function(){
+      // Confirmar que quedó eliminado en el servidor
+      eliminadosLocal[id] = true;
+    })
     .catch(function(err){
+      // Revertir si falla
+      delete eliminadosLocal[id];
       arr.splice(realIdx,0,removed);
       renderAll();
       showToast('Error al eliminar: '+err.message,'err');
