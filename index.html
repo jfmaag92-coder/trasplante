@@ -922,9 +922,16 @@ function syncData(){
         new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     })
     .catch(function(err){
-      document.getElementById('sync-label').textContent='Error';
-      showToast('Error al cargar: '+err.message,'err');
-      document.getElementById('content').innerHTML='<div class="loading" style="color:var(--red)">Error al cargar. Verificá la URL.</div>';
+      // Si el error es por lista vacía, mostrar estado vacío en lugar de error
+      if(err.message && err.message.indexOf('pacientes') >= 0){
+        patients=[]; patientsPerm=[]; notesCache={};
+        renderAll();
+        document.getElementById('sync-label').textContent='Sin pacientes cargados';
+      } else {
+        document.getElementById('sync-label').textContent='Error';
+        showToast('Error al cargar: '+err.message,'err');
+        document.getElementById('content').innerHTML='<div class="loading" style="color:var(--red)">Error al cargar. Verificá la URL.</div>';
+      }
     })
     .finally(function(){
       if(btn){btn.textContent='↻ Sincronizar';btn.disabled=false;}
